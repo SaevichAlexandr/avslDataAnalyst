@@ -1,6 +1,5 @@
 {
     "require": {
-        "facebook/webdriver": "^1.7",
         "php-webdriver/webdriver": "^1.8"
     }
 }

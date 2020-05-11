@@ -34,8 +34,7 @@ class ComposerStaticInit84e6ac3847d228d07516575698f5e562
         ),
         'Facebook\\WebDriver\\' => 
         array (
-            0 => __DIR__ . '/..' . '/facebook/webdriver/lib',
-            1 => __DIR__ . '/..' . '/php-webdriver/webdriver/lib',
+            0 => __DIR__ . '/..' . '/php-webdriver/webdriver/lib',
         ),
     );
 
