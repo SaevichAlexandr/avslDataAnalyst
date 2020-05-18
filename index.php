@@ -8,18 +8,25 @@ namespace Facebook\WebDriver;
 
 use Facebook\WebDriver\Remote\DesiredCapabilities;
 use Facebook\WebDriver\Remote\RemoteWebDriver;
+use Facebook\WebDriver\Remote\RemoteWebElement;
+use Exception;
 
 require_once('vendor/autoload.php');
 
+$time_pre = microtime(true);
+// starting selenium server
+// java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar
 // This is where Selenium server 2/3 listens by default. For Selenium 4, Chromedriver or Geckodriver, use http://localhost:4444/
-// for geckodriver
+// for geckodriver on selenium server
 $host = 'http://localhost:4444/wd/hub';
-// for chromedriver
+// for clear geckodriver
+//$host = 'http://localhost:4444';
+// for clear chromedriver
 //$host = 'http://localhost:9515';
 
-// starting selenium server
-//java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar
 $capabilities = DesiredCapabilities::firefox();
+// включение "безголового" режима
+$capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
 
 $driver = RemoteWebDriver::create($host, $capabilities);
 
@@ -29,13 +36,22 @@ $firstDepartureDay = '05';
 $firstDepartureMonth = '06';
 $secondDepartureDay = null;
 $secondDepartureMonth = null;
+/**
+ * Возможные значения для $reservationClass:
+ * '' - эконом;
+ * 'w' - комфорт;
+ * 'c' - бизнес;
+ * 'f' - первый класс.
+ */
+$reservationClass = '';
 $adults = 1;
-$children = null;
-$infants = null;
+$children = 1;
+$infants = 1;
 
-$continueButtonPresses = 3;
+// TODO: хорошая идея сохранять сырые данные, а потом уже их обрабатывать. Таким образом не будет задержки у парсера страницы.
 
-//$driver->manage()->window()->maximize();
+$continueButtonClicks = 10;
+
 $driver->get('https://www.aviasales.ru/search/'.
     $departurePoint.
     $firstDepartureDay.
@@ -43,6 +59,7 @@ $driver->get('https://www.aviasales.ru/search/'.
     $arrivalPoint.
     $secondDepartureDay.
     $secondDepartureMonth.
+    $reservationClass.
     $adults.
     $children.
     $infants.
@@ -61,15 +78,32 @@ $driver->wait()->until(WebDriverExpectedCondition::not(WebDriverExpectedConditio
     $arrivalPoint
 )));
 
-for ($i = 0; $i < $continueButtonPresses; $i++)
-{
-    $driver->findElement(WebDriverBy::cssSelector('div.show-more-products > button'))->click();
-}
+$showMoreButton = $driver->findElement(WebDriverBy::cssSelector('div.show-more-products > button'));
 
-$driver->wait()->until(WebDriverExpectedCondition::presenceOfAllElementsLocatedBy(WebDriverBy::cssSelector('div.product-list')));
+$continueButtonClicks = showMoreResults(
+    $continueButtonClicks,
+    $showMoreButton
+);
+
+// проверка на совпадение количества элементов возвращаемых при поиске с количеством элементов загруженных в браузере
+// TODO: тут пизда, надо придумать что-то для случая если элементов больше на число отличное от 10
+$driver->wait()->until(
+    function () use ($driver, $continueButtonClicks)
+    {
+        $listElements = $driver->findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
+
+        return count($listElements) >= ($continueButtonClicks + 1) * 10;
+    },
+    'Count of listElements must be another'
+);
+
+sleep(5);
 
 // почему-то через этот класс у div всё работает
 $listElements = $driver->findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
+echo 'listElements_third = ';
+var_dump(count($listElements));
+
 
 foreach ($listElements as $element)
 {
@@ -79,8 +113,36 @@ foreach ($listElements as $element)
 // TODO: стоит подумать, возможно стоит брать данные по кускам (отдельно цены, отдельно инфа о рейсе)
 $dataArray = $driver->findElements(WebDriverBy::className('ticket-desktop'));
 
-foreach ($dataArray as $item)
+for ($i = 1; $i < count($dataArray); $i++)
 {
-    echo $item->getText();
-    echo '<br>';
+    echo $i.".".$dataArray[$i]->getText();
+    echo '<br><br>';
 }
+
+/**
+ * Функция возвращает количество совершенных нажатий на кнопку "Показать еще 10 результатов"
+ *
+ * @param int $continueButtonClicks
+ * @param RemoteWebElement $driverItem
+ * @return int
+ */
+function showMoreResults(int $continueButtonClicks, RemoteWebElement $driverItem): int
+{
+    for ($i = 0; $i < $continueButtonClicks; $i++)
+    {
+        try {
+            $driverItem->click();
+        }
+        catch (Exception $ex) {
+            echo 'No more show-more buttons!';
+            return --$i;
+        }
+    }
+    return $continueButtonClicks;
+}
+
+$time_post = microtime(true);
+
+echo 'Execution time = '.($time_post - $time_pre);
+
+$driver->quit();
